@@ -2,8 +2,8 @@
 
 Holbo is a Mongolian-first travel eSIM store. The current foundation includes the Next.js app, PostgreSQL/Drizzle schema,
 validated environment, pg-boss worker, eSIM Access package client, pricing
-logic, and the Mongolian-first customer catalog. Checkout and fulfillment flows
-are added in later phases.
+logic, Mongolian-first customer catalog, and QPay checkout with a local mock
+payment flow. eSIM fulfillment is added in a later phase.
 
 ## Requirements
 
@@ -37,8 +37,8 @@ are added in later phases.
    npm run worker
    ```
 
-The app is available at `http://localhost:3000`. The worker starts pg-boss and
-registers the scheduled eSIM package sync job.
+The app is available at `http://localhost:3000`. The worker starts pg-boss and registers the eSIM package sync, payment
+verification, and invoice expiry jobs.
 
 To run all three services in containers instead, ensure `.env` exists and run:
 
@@ -116,6 +116,30 @@ confirmed to support those services. The catalog then shows that capability
 only on the matching package card. If no package is active for a destination,
 its page shows an availability message instead of fabricated prices.
 
+## QPay checkout
+
+Checkout is available from each active package card. The local mock provider is
+enabled by default; complete a mock payment on the payment page to exercise
+invoice creation, callback job handling, and verified payment status without
+QPay credentials.
+
+To use QPay sandbox, set `QPAY_PROVIDER=qpay`, `QPAY_ENVIRONMENT=sandbox`,
+`QPAY_CLIENT_ID`, `QPAY_CLIENT_SECRET`, and `QPAY_INVOICE_PROFILE_JSON` in
+`.env`. Set `APP_URL` to a public HTTPS URL so QPay can reach the callback.
+The invoice profile must contain the merchant-specific values and payload data
+provided by QPay; do not copy placeholder values from examples.
+The integration uses the documented Merchant V2 token, invoice, and payment
+check endpoints. Callback notifications enqueue verification, and an order is
+marked paid only after the payment check confirms a transaction. QPay instructs
+merchants to verify via callback rather than continuously polling payment
+status. Configure the merchant's invoice expiry to match the store's 30-minute
+checkout window; do not assume a QPay default expiry duration. The public
+Merchant V2 docs currently show only an empty `/v2/payment/check` response and
+do not document a successful payment row. The client deliberately fails closed
+on non-empty rows instead of guessing their status fields, so real QPay payment
+verification must not be enabled for sales until that positive response schema
+is confirmed and implemented.
+
 For pricing logic and provider parsing tests:
 
 ```sh
@@ -133,7 +157,6 @@ npm run build
 ## Environment
 
 `src/lib/env.ts` validates required runtime configuration. Start from
-`.env.example`; eSIM Access credentials are optional when using the default
-mock provider. QPay and other integration credentials will be added alongside
-their respective providers. No live provider credentials are needed for
-development with the mock provider.
+`.env.example`; eSIM Access and QPay credentials are optional when using their
+default mock providers. No live provider credentials are needed for development
+with mock payments.
