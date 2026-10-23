@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: holbo
+      POSTGRES_USER: holbo
+      POSTGRES_PASSWORD: holbo
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U holbo -d holbo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://holbo:holbo@postgres:5432/holbo
+      APP_URL: http://localhost:3000
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm ci && npm run worker"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://holbo:holbo@postgres:5432/holbo
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

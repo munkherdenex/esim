@@ -1,0 +1,10 @@
+.next/
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+drizzle/
+npm-debug.log*
