@@ -1,9 +1,9 @@
 # Holbo
 
-Holbo is a Mongolian-first travel eSIM store. The current foundation includes
-the Next.js app, PostgreSQL/Drizzle schema, validated environment, pg-boss
-worker, eSIM Access package client, and pricing logic. Customer checkout and
-fulfillment flows are added in later phases.
+Holbo is a Mongolian-first travel eSIM store. The current foundation includes the Next.js app, PostgreSQL/Drizzle schema,
+validated environment, pg-boss worker, eSIM Access package client, pricing
+logic, and the Mongolian-first customer catalog. Checkout and fulfillment flows
+are added in later phases.
 
 ## Requirements
 
@@ -100,6 +100,21 @@ The worker also schedules a daily sync at 03:00 UTC. Imported packages stay
 inactive until curated. Syncs preserve the active flag, manually assigned
 Mongolian country name, and any admin price override; the China social-app flag
 also remains opt-in.
+
+The customer catalog is available at `/` with country pages at `/china` and
+`/south-korea`. Country pages include Mongolian metadata, and the app exposes a
+sitemap and Open Graph image. The catalog displays only active packages from
+PostgreSQL. To preview synced packages before the admin panel is available,
+activate curated packages manually in the database, for example:
+
+```sql
+UPDATE packages SET is_active = true WHERE country_code IN ('CN', 'KR');
+```
+
+For China packages, set `supports_china_social_apps` to `true` only for plans
+confirmed to support those services. The catalog then shows that capability
+only on the matching package card. If no package is active for a destination,
+its page shows an availability message instead of fabricated prices.
 
 For pricing logic and provider parsing tests:
 
