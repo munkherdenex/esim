@@ -8,6 +8,8 @@
     "start": "next start",
     "worker": "tsx worker/index.ts",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "packages:sync": "tsx src/server/jobs/run-package-sync.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },
@@ -32,6 +34,12 @@
     "drizzle-kit": "^0.31.4",
     "tailwindcss": "^4.1.10",
     "tsx": "^4.20.3",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^5.0.5"
+  },
+  "overrides": {
+    "@esbuild-kit/core-utils": {
+      "esbuild": "^0.25.12"
+    }
   }
 }

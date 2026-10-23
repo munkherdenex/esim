@@ -3,6 +3,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgTable,
   text,
@@ -25,12 +26,14 @@ export const packages = pgTable(
   {
     id: uuid('id').defaultRandom().primaryKey(),
     providerPackageCode: text('provider_package_code').notNull(),
+    providerName: text('provider_name').notNull(),
     countryCode: text('country_code').notNull(),
-    countryNameMn: text('country_name_mn').notNull(),
-    dataGb: integer('data_gb').notNull(),
+    countryNameMn: text('country_name_mn'),
+    dataGb: numeric('data_gb', { precision: 12, scale: 3, mode: 'number' }).notNull(),
     validityDays: integer('validity_days').notNull(),
-    costUsdCents: integer('cost_usd_cents').notNull(),
+    costUsd: numeric('cost_usd', { precision: 12, scale: 4, mode: 'number' }).notNull(),
     priceMnt: integer('price_mnt').notNull(),
+    priceOverridden: boolean('price_overridden').notNull().default(false),
     supportsChinaSocialApps: boolean('supports_china_social_apps')
       .notNull()
       .default(false),
