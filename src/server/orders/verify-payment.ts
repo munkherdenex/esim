@@ -3,6 +3,9 @@ import { db } from '@/db';
 import { orderEvents, orders } from '@/db/schema';
 import { createPaymentProvider } from '@/server/qpay';
 import type { PaymentVerification } from '@/server/qpay/types';
+import { enqueueJob } from '@/server/jobs/queue';
+import { FULFILL_ORDER_JOB } from '@/server/jobs/names';
+import { assertOrderTransition } from './state-machine';
 
 export async function verifyOrderPayment(orderId: string): Promise<void> {
   const [order] = await db
@@ -44,7 +47,7 @@ export async function verifyOrderPayment(orderId: string): Promise<void> {
     });
     throw error;
   }
-  await db.transaction(async (transaction) => {
+  const paidOrder = await db.transaction(async (transaction) => {
     await transaction.insert(orderEvents).values({
       orderId,
       type: 'QPAY_PAYMENT_CHECKED',
@@ -55,7 +58,8 @@ export async function verifyOrderPayment(orderId: string): Promise<void> {
       },
     });
 
-    if (!result.paid) return;
+    if (!result.paid) return false;
+    assertOrderTransition('PENDING_PAYMENT', 'PAID');
 
     const [updatedOrder] = await transaction
       .update(orders)
@@ -83,5 +87,38 @@ export async function verifyOrderPayment(orderId: string): Promise<void> {
         details: { status: 'PAID' },
       });
     }
+    return Boolean(updatedOrder);
   });
+
+  if (paidOrder) {
+    try {
+      const jobId = await enqueueJob(
+        FULFILL_ORDER_JOB,
+        { orderId },
+        {
+          retryLimit: 8,
+          retryDelay: 15,
+          retryBackoff: true,
+          singletonKey: orderId,
+          singletonMinutes: 2,
+        },
+      );
+      await db.insert(orderEvents).values({
+        orderId,
+        type: 'ESIM_FULFILLMENT_ENQUEUED',
+        message: 'eSIM fulfillment job enqueued',
+        details: { jobId },
+      });
+    } catch (error) {
+      await db.insert(orderEvents).values({
+        orderId,
+        type: 'ESIM_FULFILLMENT_ENQUEUE_FAILED',
+        message: 'eSIM fulfillment job enqueue failed; periodic reconciliation will recover',
+        details: {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+      });
+      throw error;
+    }
+  }
 }

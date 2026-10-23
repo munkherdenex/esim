@@ -1,4 +1,4 @@
-import type { EsimPackage, EsimProvider } from './types';
+import type { EsimPackage, EsimProfile, EsimProvider } from './types';
 
 const packages: EsimPackage[] = [
   {
@@ -30,5 +30,34 @@ const packages: EsimPackage[] = [
 export class MockEsimProvider implements EsimProvider {
   async listPackages(): Promise<EsimPackage[]> {
     return packages.map((item) => ({ ...item }));
+  }
+
+  async orderProfile(input: {
+    transactionId: string;
+    packageCode: string;
+  }): Promise<{ orderNo: string }> {
+    return {
+      orderNo: `MOCK-${input.transactionId}`,
+    };
+  }
+
+  async queryProfiles(orderNo: string): Promise<EsimProfile[]> {
+    const transactionId = orderNo.replace(/^MOCK-/, '');
+    return [
+      {
+        orderNo,
+        transactionId,
+        esimTranNo: `MOCK-TRAN-${transactionId}`,
+        iccid: `MOCK-${transactionId}`,
+        activationCode: 'LPA:1$mock.invalid$MOCK-NOT-INSTALLABLE',
+        qrCodeUrl: '/mock-esim-qr.svg',
+        smdpStatus: 'RELEASED',
+        esimStatus: 'GOT_RESOURCE',
+      },
+    ];
+  }
+
+  async setWebhook(): Promise<void> {
+    throw new Error('Webhook registration is unavailable with the mock provider');
   }
 }

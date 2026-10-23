@@ -58,6 +58,7 @@ export const orders = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     publicCode: text('public_code').notNull(),
     accessTokenHash: text('access_token_hash').notNull(),
+    accessTokenEncrypted: text('access_token_encrypted'),
     checkoutIdempotencyKeyHash: text('checkout_idempotency_key_hash').notNull(),
     customerPhone: text('customer_phone').notNull(),
     customerEmail: text('customer_email'),
@@ -89,8 +90,12 @@ export const orders = pgTable(
     qpayInvoiceAttemptedAt: timestamp('qpay_invoice_attempted_at', {
       withTimezone: true,
     }),
+    fulfillmentAttempts: integer('fulfillment_attempts').notNull().default(0),
     paidAt: timestamp('paid_at', { withTimezone: true }),
     deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+    deliveryEmailCompletedAt: timestamp('delivery_email_completed_at', {
+      withTimezone: true,
+    }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

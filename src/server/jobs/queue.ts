@@ -6,10 +6,11 @@ let bossPromise: Promise<PgBoss> | undefined;
 export async function enqueueJob(
   name: string,
   data: Record<string, unknown>,
+  options?: PgBoss.SendOptions,
 ): Promise<string | null> {
   bossPromise ??= startBoss();
   const boss = await bossPromise;
-  return boss.send(name, data);
+  return options ? boss.send(name, data, options) : boss.send(name, data);
 }
 
 async function startBoss(): Promise<PgBoss> {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { formatPriceMnt } from '@/lib/catalog';
 import type { QPayInvoiceLink } from '@/server/qpay/types';
 
@@ -25,8 +26,6 @@ interface PaymentStatusProps {
 }
 
 const finishedStatuses = new Set<OrderStatus>([
-  'PAID',
-  'PROVISIONING',
   'DELIVERED',
   'FAILED',
   'EXPIRED',
@@ -46,8 +45,8 @@ const statusCopy: Record<OrderStatus, { title: string; detail: string }> = {
     detail: 'Бэлэн болмогц захиалгын мэдээлэл шинэчлэгдэнэ.',
   },
   DELIVERED: {
-    title: 'Төлбөр амжилттай',
-    detail: 'Таны eSIM профайлыг бэлдэж байна.',
+    title: 'Таны eSIM бэлэн боллоо',
+    detail: 'QR код болон суулгах зааврыг захиалгын хуудсаас хараарай.',
   },
   FAILED: {
     title: 'Захиалгыг шалгаж байна',
@@ -181,6 +180,15 @@ export function PaymentStatus({
           <p className="text-lg font-bold">{formatPriceMnt(priceMnt)}</p>
         </div>
       </div>
+
+      {status === 'DELIVERED' && (
+        <Link
+          className="flex min-h-12 items-center justify-center rounded-full bg-[#173b33] px-5 text-sm font-bold text-white transition hover:bg-[#245748]"
+          href={`/order/${encodeURIComponent(publicCode)}?t=${encodeURIComponent(accessToken)}`}
+        >
+          eSIM харах, суулгах заавар
+        </Link>
+      )}
 
       <div
         aria-live="polite"

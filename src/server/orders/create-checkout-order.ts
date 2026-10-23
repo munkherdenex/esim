@@ -5,6 +5,7 @@ import { db } from '@/db';
 import { orderEvents, orders, packages } from '@/db/schema';
 import { createPaymentProvider } from '@/server/qpay';
 import { hashAccessToken } from './token';
+import { encryptAccessToken } from './encrypted-token';
 
 const invoiceLifetimeMs = 30 * 60 * 1000;
 
@@ -74,6 +75,7 @@ export async function createCheckoutOrder(input: {
     id: orderId,
     publicCode,
     accessTokenHash: idempotencyHash,
+    accessTokenEncrypted: encryptAccessToken(input.idempotencyKey),
     checkoutIdempotencyKeyHash: idempotencyHash,
     customerPhone: input.customerPhone,
     customerEmail: input.customerEmail ?? null,

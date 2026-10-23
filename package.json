@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "packages:sync": "tsx src/server/jobs/run-package-sync.ts",
+    "esim:webhook:configure": "tsx src/server/jobs/configure-esim-webhook.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },

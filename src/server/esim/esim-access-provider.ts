@@ -1,3 +1,4 @@
+import { createHmac, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { EsimPackage, EsimProvider } from './types';
 
@@ -16,17 +17,46 @@ const providerPackageSchema = z.object({
   location: z.string().min(1),
 });
 
-const packageListResponseSchema = z.object({
-  success: z.boolean(),
-  errorCode: z.union([z.string(), z.number()]).nullable().optional(),
-  errorMsg: z.string().nullable().optional(),
-  obj: z
-    .object({
-      packageList: z.array(providerPackageSchema),
-    })
-    .nullable()
-    .optional(),
-});
+const apiResponseSchema = <T extends z.ZodType>(objSchema: T) =>
+  z.object({
+    success: z.boolean(),
+    errorCode: z.union([z.string(), z.number()]).nullable().optional(),
+    errorMsg: z.string().nullable().optional(),
+    errorMessage: z.string().nullable().optional(),
+    obj: objSchema.nullable().optional(),
+  });
+
+const packageListResponseSchema = apiResponseSchema(
+  z.object({
+    packageList: z.array(providerPackageSchema),
+  }),
+);
+
+const orderResponseSchema = apiResponseSchema(
+  z.object({
+    orderNo: z.string().min(1),
+    transactionId: z.string().min(1).optional(),
+  }),
+);
+
+const profileResponseSchema = apiResponseSchema(
+  z.object({
+    esimList: z.array(
+      z.object({
+        orderNo: z.string().min(1),
+        transactionId: z.string().min(1).optional(),
+        esimTranNo: z.string().min(1),
+        iccid: z.string().min(1),
+        ac: z.string().min(1),
+        qrCodeUrl: z.string().url(),
+        smdpStatus: z.string().min(1),
+        esimStatus: z.string().min(1),
+      }),
+    ),
+  }),
+);
+
+const setWebhookResponseSchema = apiResponseSchema(z.object({}));
 
 export class EsimAccessApiError extends Error {
   constructor(
@@ -45,29 +75,120 @@ export class EsimAccessProvider implements EsimProvider {
 
   constructor(
     private readonly accessCode: string,
+    private readonly secretKey: string,
     private readonly fetcher: typeof fetch = fetch,
   ) {
-    if (!accessCode.trim()) {
-      throw new Error('An eSIM Access RT-AccessCode is required');
+    if (!accessCode.trim() || !secretKey.trim()) {
+      throw new Error('eSIM Access RT-AccessCode and secret key are required');
     }
   }
 
   async listPackages(): Promise<EsimPackage[]> {
-    await this.waitForRateLimit();
+    const data = await this.request(
+      packagesPath,
+      { type: 'BASE' },
+      packageListResponseSchema,
+    );
 
-    const response = await this.fetcher(`${baseUrl}${packagesPath}`, {
+    return data.packageList.map((item) => ({
+      providerPackageCode: item.packageCode,
+      providerName: item.name,
+      countryCode: item.location,
+      dataGb: Number((item.volume / 1024 ** 3).toFixed(3)),
+      validityDays: item.duration,
+      costUsd: item.price / 10_000,
+    }));
+  }
+
+  async orderProfile(input: {
+    transactionId: string;
+    packageCode: string;
+  }): Promise<{ orderNo: string }> {
+    const result = await this.request(
+      '/api/v1/open/esim/order',
+      {
+        transactionId: input.transactionId,
+        packageInfoList: [{ packageCode: input.packageCode, count: 1 }],
+      },
+      orderResponseSchema,
+    );
+    if (
+      result.transactionId &&
+      result.transactionId !== input.transactionId
+    ) {
+      throw new EsimAccessApiError(
+        'eSIM Access returned a different transactionId for the profile order',
+      );
+    }
+    return { orderNo: result.orderNo };
+  }
+
+  async queryProfiles(orderNo: string) {
+    const result = await this.request(
+      '/api/v1/open/esim/query',
+      {
+        orderNo,
+        iccid: '',
+        pager: { pageNum: 1, pageSize: 50 },
+      },
+      profileResponseSchema,
+    );
+
+    return result.esimList.map((profile) => ({
+      orderNo: profile.orderNo,
+      transactionId: profile.transactionId,
+      esimTranNo: profile.esimTranNo,
+      iccid: profile.iccid,
+      activationCode: profile.ac,
+      qrCodeUrl: profile.qrCodeUrl,
+      smdpStatus: profile.smdpStatus,
+      esimStatus: profile.esimStatus,
+    }));
+  }
+
+  async setWebhook(webhookUrl: string): Promise<void> {
+    const validatedUrl = z.string().url().parse(webhookUrl);
+    await this.request(
+      '/api/v1/open/webhook/save',
+      { webhook: validatedUrl },
+      setWebhookResponseSchema,
+    );
+  }
+
+  private async request<T>(
+    path: string,
+    body: unknown,
+    responseSchema: z.ZodType<{
+      success: boolean;
+      errorCode?: string | number | null;
+      errorMsg?: string | null;
+      errorMessage?: string | null;
+      obj?: T | null;
+    }>,
+  ): Promise<T> {
+    await this.waitForRateLimit();
+    const requestBody = JSON.stringify(body);
+    const timestamp = Date.now().toString();
+    const requestId = randomUUID();
+    const signature = createHmac('sha256', this.secretKey)
+      .update(`${timestamp}${requestId}${this.accessCode}${requestBody}`)
+      .digest('hex');
+    const response = await this.fetcher(`${baseUrl}${path}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'RT-AccessCode': this.accessCode,
+        'RT-Timestamp': timestamp,
+        'RT-RequestID': requestId,
+        'RT-Signature': signature,
       },
-      body: JSON.stringify({ type: 'BASE' }),
+      body: requestBody,
       signal: AbortSignal.timeout(15_000),
     });
 
     if (!response.ok) {
       throw new EsimAccessApiError(
-        `eSIM Access package request failed with HTTP ${response.status}`,
+        `eSIM Access request to ${path} failed with HTTP ${response.status}`,
         response.status,
       );
     }
@@ -77,39 +198,32 @@ export class EsimAccessProvider implements EsimProvider {
       responseBody = await response.json();
     } catch (error) {
       throw new EsimAccessApiError(
-        `eSIM Access returned invalid JSON: ${
+        `eSIM Access returned invalid JSON for ${path}: ${
           error instanceof Error ? error.message : 'unknown parse error'
         }`,
         response.status,
       );
     }
 
-    const parsed = packageListResponseSchema.safeParse(responseBody);
+    const parsed = responseSchema.safeParse(responseBody);
     if (!parsed.success) {
       throw new EsimAccessApiError(
-        `eSIM Access package response did not match the documented schema: ${parsed.error.message}`,
+        `eSIM Access response for ${path} did not match the documented schema: ${parsed.error.message}`,
         response.status,
       );
     }
-
     if (!parsed.data.success || !parsed.data.obj) {
       throw new EsimAccessApiError(
-        `eSIM Access package request was rejected: ${
-          parsed.data.errorMsg ?? 'provider returned success=false'
+        `eSIM Access request to ${path} was rejected: ${
+          parsed.data.errorMsg ??
+          parsed.data.errorMessage ??
+          'provider returned success=false'
         }`,
         response.status,
         parsed.data.errorCode,
       );
     }
-
-    return parsed.data.obj.packageList.map((item) => ({
-      providerPackageCode: item.packageCode,
-      providerName: item.name,
-      countryCode: item.location,
-      dataGb: Number((item.volume / 1024 ** 3).toFixed(3)),
-      validityDays: item.duration,
-      costUsd: item.price / 10_000,
-    }));
+    return parsed.data.obj;
   }
 
   private async waitForRateLimit(): Promise<void> {

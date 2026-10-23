@@ -3,6 +3,7 @@ import { pool } from '../src/db';
 import { env } from '../src/lib/env';
 import { registerPackageSyncJob } from '../src/server/jobs/package-sync';
 import { registerPaymentJobs } from '../src/server/jobs/payment';
+import { registerFulfillmentJobs } from '../src/server/jobs/fulfillment';
 
 async function main() {
   const boss = new PgBoss({
@@ -16,6 +17,7 @@ async function main() {
   await boss.start();
   await registerPackageSyncJob(boss);
   await registerPaymentJobs(boss);
+  await registerFulfillmentJobs(boss);
   console.info('Holbo worker started');
 
   let stopping = false;

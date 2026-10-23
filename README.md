@@ -68,17 +68,15 @@ npm run db:migrate
 ## eSIM Access package sync
 
 The eSIM Access client uses the official
-[eSIM Access reseller API documentation](https://docs.esimaccess.com/). It sends
-the documented `RT-AccessCode` header to
-`POST https://api.esimaccess.com/api/v1/open/package/list` and validates the
-provider response with Zod. The client currently implements package listing;
-order fulfillment and usage operations will be added in their respective
-phases.
+[eSIM Access reseller API documentation](https://docs.esimaccess.com/). It
+signs each request with the documented `RT-Timestamp`, `RT-RequestID`,
+`RT-AccessCode`, and `RT-Signature` headers and validates provider responses
+with Zod. It supports package listing and profile fulfillment.
 
 The mock provider is selected by default. To use the live provider, set
-`ESIM_PROVIDER=esim-access` and supply `ESIM_ACCESS_CODE` in `.env`. There is no
-provider sandbox according to the official documentation, so live API calls
-can use the prepaid balance.
+`ESIM_PROVIDER=esim-access` and supply both `ESIM_ACCESS_CODE` and
+`ESIM_ACCESS_SECRET` in `.env`. There is no provider sandbox according to the
+official documentation, so live API calls can use the prepaid balance.
 
 Package sync calculates MNT prices using the following settings, read from the
 `settings` table first and then from the corresponding environment variables:
@@ -139,6 +137,44 @@ do not document a successful payment row. The client deliberately fails closed
 on non-empty rows instead of guessing their status fields, so real QPay payment
 verification must not be enabled for sales until that positive response schema
 is confirmed and implemented.
+
+## eSIM fulfillment and delivery
+
+After QPay verification moves an order to `PAID`, the worker places the
+eSIM Access order using the order's stable `providerTransactionId` as the
+documented `transactionId`. It queries allocated profiles by provider
+`orderNo`, retries asynchronous allocation with pg-boss backoff, and moves the
+order to `FAILED` after the configured retry limit. Orders and webhook-triggered
+reconciliation are also swept periodically so queue enqueue failures do not
+leave paid orders stranded.
+
+Set `ESIM_WEBHOOK_SECRET` to a random value with at least 32 characters. Set
+`APP_URL` to the public host, then register the callback using the signed,
+documented eSIM Access `/api/v1/open/webhook/save` API:
+
+```sh
+npm run esim:webhook:configure
+```
+
+The official eSIM Access docs identify `ORDER_STATUS` notifications but do not
+publish their payload schema in the API collection. The webhook therefore
+validates JSON and triggers a database reconciliation; it does not trust or
+interpret undocumented fields. eSIM Access has no sandbox, so local testing
+uses the mock provider and its visibly non-installable test profile.
+
+If you want delivery email, configure `RESEND_API_KEY`,
+`RESEND_FROM_EMAIL`, and `ORDER_TOKEN_ENCRYPTION_KEY` in `.env`. Generate the
+AES-256 key with:
+
+```sh
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+The order access token is stored encrypted for email-link creation; only its
+hash is used for order-page authorization. Email sends use a stable idempotency
+key, and failed sends are retried and reconciled. Without Resend configuration,
+orders still deliver through the protected order page; the omission is recorded
+in the order event log.
 
 For pricing logic and provider parsing tests:
 

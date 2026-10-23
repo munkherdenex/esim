@@ -33,6 +33,10 @@ export async function GET(
       accessTokenHash: orders.accessTokenHash,
       status: orders.status,
       expiresAt: orders.expiresAt,
+      deliveredAt: orders.deliveredAt,
+      iccid: orders.iccid,
+      activationCode: orders.lpaActivationCode,
+      qrUrl: orders.qrUrl,
     })
     .from(orders)
     .where(eq(orders.publicCode, code))
@@ -45,5 +49,15 @@ export async function GET(
   return Response.json({
     status: order.status,
     expiresAt: order.expiresAt?.toISOString() ?? null,
+    deliveredAt: order.deliveredAt?.toISOString() ?? null,
+    ...(order.status === 'DELIVERED'
+      ? {
+          profile: {
+            iccid: order.iccid,
+            activationCode: order.activationCode,
+            qrUrl: order.qrUrl,
+          },
+        }
+      : {}),
   });
 }

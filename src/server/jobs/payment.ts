@@ -4,6 +4,7 @@ import { verifyOrderPayment } from '@/server/orders/verify-payment';
 import { db } from '@/db';
 import { orderEvents, orders } from '@/db/schema';
 import { and, eq, lte } from 'drizzle-orm';
+import { assertOrderTransition } from '@/server/orders/state-machine';
 
 export const VERIFY_PAYMENT_JOB = 'verify-qpay-payment';
 export const EXPIRE_INVOICES_JOB = 'expire-pending-invoices';
@@ -41,6 +42,7 @@ export async function registerPaymentJobs(boss: PgBoss): Promise<void> {
         .returning({ id: orders.id });
 
       for (const order of expiredOrders) {
+        assertOrderTransition('PENDING_PAYMENT', 'EXPIRED');
         await transaction.insert(orderEvents).values({
           orderId: order.id,
           type: 'STATUS_CHANGED',
