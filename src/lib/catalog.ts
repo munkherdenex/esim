@@ -36,6 +36,10 @@ export function getCountryBySlug(slug: string): Country | undefined {
   return countries.find((country) => country.slug === slug);
 }
 
+export function getCountryByCode(code: string): Country | undefined {
+  return countries.find((country) => country.code === code);
+}
+
 export function formatPriceMnt(priceMnt: number): string {
   return `₮${new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 0,

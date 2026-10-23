@@ -1,9 +1,11 @@
 import { formatPriceMnt } from '@/lib/catalog';
+import Link from 'next/link';
 
 interface PackageCardProps {
   dataGb: number;
   validityDays: number;
   priceMnt: number;
+  packageId: string;
   supportsChinaSocialApps: boolean;
   bestValue: boolean;
 }
@@ -12,6 +14,7 @@ export function PackageCard({
   dataGb,
   validityDays,
   priceMnt,
+  packageId,
   supportsChinaSocialApps,
   bestValue,
 }: PackageCardProps) {
@@ -50,6 +53,12 @@ export function PackageCard({
             Энэ багц Google, Facebook, Instagram ашиглахыг дэмждэг.
           </p>
         )}
+        <Link
+          href={`/checkout?packageId=${encodeURIComponent(packageId)}`}
+          className="mt-4 flex min-h-11 items-center justify-center rounded-full bg-[#173b33] px-4 text-sm font-semibold text-white transition hover:bg-[#245748]"
+        >
+          Багц сонгох
+        </Link>
       </div>
     </article>
   );

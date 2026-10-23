@@ -58,6 +58,7 @@ export const orders = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     publicCode: text('public_code').notNull(),
     accessTokenHash: text('access_token_hash').notNull(),
+    checkoutIdempotencyKeyHash: text('checkout_idempotency_key_hash').notNull(),
     customerPhone: text('customer_phone').notNull(),
     customerEmail: text('customer_email'),
     packageId: uuid('package_id')
@@ -66,6 +67,17 @@ export const orders = pgTable(
     priceMnt: integer('price_mnt').notNull(),
     status: orderStatus('status').notNull().default('PENDING_PAYMENT'),
     qpayInvoiceId: text('qpay_invoice_id'),
+    qpayQrText: text('qpay_qr_text'),
+    qpayQrImage: text('qpay_qr_image'),
+    qpayShortUrl: text('qpay_short_url'),
+    qpayUrls: jsonb('qpay_urls').$type<
+      Array<{
+        name: string;
+        description?: string;
+        logo?: string;
+        link: string;
+      }>
+    >(),
     qpayPaymentId: text('qpay_payment_id'),
     providerOrderNo: text('provider_order_no'),
     providerTransactionId: text('provider_transaction_id').notNull(),
@@ -74,6 +86,9 @@ export const orders = pgTable(
     qrUrl: text('qr_url'),
     errorMessage: text('error_message'),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
+    qpayInvoiceAttemptedAt: timestamp('qpay_invoice_attempted_at', {
+      withTimezone: true,
+    }),
     paidAt: timestamp('paid_at', { withTimezone: true }),
     deliveredAt: timestamp('delivered_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })
@@ -90,6 +105,9 @@ export const orders = pgTable(
     ),
     uniqueIndex('orders_qpay_invoice_id_uq').on(table.qpayInvoiceId),
     uniqueIndex('orders_qpay_payment_id_uq').on(table.qpayPaymentId),
+    uniqueIndex('orders_checkout_idempotency_key_uq').on(
+      table.checkoutIdempotencyKeyHash,
+    ),
     index('orders_status_created_at_idx').on(table.status, table.createdAt),
   ],
 );
@@ -156,4 +174,12 @@ export const settings = pgTable('settings', {
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
+});
+
+export const apiRateLimits = pgTable('api_rate_limits', {
+  keyHash: text('key_hash').primaryKey(),
+  windowStartedAt: timestamp('window_started_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  requestCount: integer('request_count').notNull().default(0),
 });

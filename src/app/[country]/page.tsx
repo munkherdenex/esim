@@ -105,6 +105,7 @@ export default async function CountryPage({ params }: CountryPageProps) {
                   dataGb={item.dataGb}
                   validityDays={item.validityDays}
                   priceMnt={item.priceMnt}
+                  packageId={item.id}
                   supportsChinaSocialApps={
                     country.code === 'CN' && item.supportsChinaSocialApps
                   }
